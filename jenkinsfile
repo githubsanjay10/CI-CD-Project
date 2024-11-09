@@ -1,0 +1,70 @@
+def COLOR_MAP = [
+    'SUCCESS': 'good',
+    'FAILURE': 'danger'
+]
+
+pipeline {
+    agent any
+    
+    environment {
+        SCANNER_HOME = tool 'sonarqube'
+    }
+    
+    stages {
+        stage('Git Checkout') {
+            steps {
+                // Checkout code from your GitHub repository
+                git 'https://github.com/Sushmaa123/Java-Springboot.git'
+            }
+        }
+        
+        stage('Compile') {
+            steps {
+                // Compile the application using Maven
+                sh 'mvn compile'
+            }
+        }
+        
+        stage('Code Analysis') {
+            steps {
+                // Run SonarQube analysis
+                withSonarQubeEnv('sonar-server') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Java-Springboot \
+                          -Dsonar.java.binaries=. \
+                          -Dsonar.projectKey=Java-Springboot'''
+                }
+            }
+        }
+        
+        stage('Package') {
+            steps {
+                // Package the application using Maven (produces the JAR file)
+                sh 'mvn install'
+            }
+        }
+        
+        stage('Docker Build') {
+            steps {
+                // Build the Docker image for your Spring Boot application
+                sh 'docker build -t spring-boot1 .'
+            }
+        }
+        
+        stage('Docker Run') {
+            steps {
+                // Run the Docker container
+                sh 'docker run -d -p 8093:8091 spring-boot1'
+            }
+        }
+    }
+
+    post {
+        always {
+            // Send a Slack notification with the build result
+            echo 'Sending Slack notification...'
+            slackSend channel: '#ci-cd',
+                      color: COLOR_MAP[currentBuild.currentResult],
+                      message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+        }
+    }
+}
